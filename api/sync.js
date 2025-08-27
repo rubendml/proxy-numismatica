@@ -1,36 +1,41 @@
-// api/sync.js - Proxy simple para GitHub
+// api/sync.js
 module.exports = async function (req, res) {
   const { method } = req;
 
   // === CONFIGURACIÓN ===
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-  const OWNER = 'rubendml';                     // Tu usuario de GitHub
-  const REPO = 'numismatica';                   // Nombre del repositorio
-  const BRANCH = 'main';                        // Rama (main o master)
+  const OWNER = 'rubendml';
+  const REPO = 'numismatica';
+  const BRANCH = 'main';
 
-  // Validación del token
   if (!GITHUB_TOKEN) {
     console.error('❌ GITHUB_TOKEN no está definido');
-    return res.status(500).json({ error: 'Token de GitHub no configurado en el servidor' });
+    return res.status(500).json({ error: 'Token de GitHub no configurado' });
   }
 
   try {
-    // === LECTURA: GET /api/sync?path=data/catalogo.json ===
+    // === LECTURA: GET /api/sync?path=data/catálogo.json ===
     if (method === 'GET') {
-      const PATH = req.query.path || 'data/catalogo.json';
+      const PATH = req.query.path || 'data/catálogo.json';
       const fileUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
 
       const response = await fetch(fileUrl, {
         headers: {
           'Authorization': `Bearer ${GITHUB_TOKEN}`,
           'Accept': 'application/vnd.github.v3+json'
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         console.error('❌ Error al obtener archivo:', error);
-        return res.status(response.status).json({ error: error.message || 'No se pudo acceder al archivo' });
+        return res.status(response.status).json({ error: error.message });
       }
 
       const data = await response.json();
@@ -100,7 +105,6 @@ module.exports = async function (req, res) {
       }
     }
 
-    // Método no permitido
     return res.status(405).json({ error: 'Método no permitido' });
   } catch (error) {
     console.error('❌ Error en el proxy:', error);
